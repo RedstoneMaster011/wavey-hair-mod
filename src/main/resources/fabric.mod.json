@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "hair-physics",
+  "version": "${version}",
+  "name": "Hair-Physics",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/hair-physics/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "dev.redstone.hairphysics.client.HairphysicsDataGenerator"
+    ],
+    "client": [
+      "dev.redstone.hairphysics.client.HairphysicsClient"
+    ],
+    "main": [
+      "dev.redstone.hairphysics.Hairphysics"
+    ]
+  },
+  "mixins": [
+    "hair-physics.mixins.json",
+    {
+      "config": "hair-physics.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
