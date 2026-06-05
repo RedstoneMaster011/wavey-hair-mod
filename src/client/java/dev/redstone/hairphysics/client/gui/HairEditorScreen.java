@@ -45,8 +45,6 @@ import java.util.regex.Pattern;
 public class HairEditorScreen extends Screen {
 
     
-    private static final int SCALE   = 6;
-    private static final int SKIN_S  = 64 * SCALE;
     private static final int PAD     = 8;
     private static final int LIST_W  = 144;
     private static final int PROPS_W = 190;
@@ -54,6 +52,7 @@ public class HairEditorScreen extends Screen {
     private static final int BOT_H   = 30;
     private static final int DROP_H  = 18;
     private static final int DROP_ITEM_H = 18;
+    private static final double EDITOR_GUI_SCALE = 2.0;
     private static final int[][] SKIN_LAYER_MAP = {
         {0, 0, 32, 16, 32, 0},    
         {16, 16, 24, 16, 0, 16},  
@@ -107,6 +106,7 @@ public class HairEditorScreen extends Screen {
     private boolean presetDropdownOpen;
     private boolean originDropdownOpen;
     private int listScrollRows;
+    private int sliderScrollRows;
 
     
     private double mouseX, mouseY;
@@ -120,7 +120,8 @@ public class HairEditorScreen extends Screen {
     private long lastLiveSliderUpdateMs;
 
     
-    private int skinX, skinY, listX, listY, propsX, propsY, botY;
+    private int skinX, skinY, listX, listY, propsX, propsY, botY, skinScale, skinSize, editorWidth, editorHeight;
+    private float editorRenderScale = 1.0f;
 
     
     private TextFieldWidget idField, boneField, presetNameField;
@@ -147,13 +148,18 @@ public class HairEditorScreen extends Screen {
         refreshActiveSkin();
         reloadPresetList();
 
+        updateEditorScale();
         skinX  = PAD;
         skinY  = 14;
-        listX  = skinX + SKIN_S + PAD;
+        botY   = editorHeight - BOT_H;
+        skinScale = computeSkinScale();
+        skinSize = 64 * skinScale;
+        listX  = skinX + skinSize + PAD;
         listY  = skinY;
         propsX = listX + LIST_W + PAD;
         propsY = skinY;
-        botY   = this.height - BOT_H;
+        clampListScroll();
+        clampSliderScroll();
 
         addDrawableChild(ButtonWidget.builder(Text.literal("+ Origin"), btn -> addOrigin())
             .dimensions(listX, listY, (LIST_W - 2) / 2, ROW_H).build());
@@ -216,34 +222,39 @@ public class HairEditorScreen extends Screen {
     public void render(DrawContext ctx, int mx, int my, float delta) {
         refreshActiveSkin();
 
-        ctx.fill(0, 0, this.width, this.height, 0xBB000000);
+        int editorMx = toEditorX(mx);
+        int editorMy = toEditorY(my);
+        ctx.getMatrices().pushMatrix();
+        ctx.getMatrices().scale(editorRenderScale);
+        ctx.fill(0, 0, editorWidth, editorHeight, 0xBB000000);
         ctx.drawTextWithShadow(textRenderer, "§bHair Physics Editor  §7[G / ESC to close]", PAD, 3, TEXT_WHITE);
 
         drawSkinCanvas(ctx);
-        drawOriginList(ctx, mx, my);
+        drawOriginList(ctx, editorMx, editorMy);
         drawPropsPanel(ctx);
-        drawSliders(ctx, mx, my);
+        drawSliders(ctx, editorMx, editorMy);
         drawBottomBar(ctx);
 
-        super.render(ctx, mx, my, delta);
-        drawDropdownPopups(ctx, mx, my);
+        super.render(ctx, editorMx, editorMy, delta);
+        drawDropdownPopups(ctx, editorMx, editorMy);
+        ctx.getMatrices().popMatrix();
     }
 
     private void drawSkinCanvas(DrawContext ctx) {
-        ctx.fill(skinX - 1, skinY - 1, skinX + SKIN_S + 1, skinY + SKIN_S + 1, 0xFF222222);
+        ctx.fill(skinX - 1, skinY - 1, skinX + skinSize + 1, skinY + skinSize + 1, 0xFF222222);
         if (skinId != null) {
             ctx.drawTexture(RenderPipelines.GUI_TEXTURED,
-                skinId, skinX, skinY, 0f, 0f, SKIN_S, SKIN_S, 64, 64, 64, 64);
+                skinId, skinX, skinY, 0f, 0f, skinSize, skinSize, 64, 64, 64, 64);
         }
         for (int g = 0; g <= 64; g += 8) {
-            ctx.fill(skinX + g * SCALE, skinY, skinX + g * SCALE + 1, skinY + SKIN_S, 0x30FFFFFF);
-            ctx.fill(skinX, skinY + g * SCALE, skinX + SKIN_S, skinY + g * SCALE + 1, 0x30FFFFFF);
+            ctx.fill(skinX + g * skinScale, skinY, skinX + g * skinScale + 1, skinY + skinSize, 0x30FFFFFF);
+            ctx.fill(skinX, skinY + g * skinScale, skinX + skinSize, skinY + g * skinScale + 1, 0x30FFFFFF);
         }
         for (int i = 0; i < origins.size(); i++) {
             OriginEntry o = origins.get(i);
             if (o.anchorOnly) continue;
-            int rx = skinX + o.regionU * SCALE, ry = skinY + o.regionV * SCALE;
-            int rw = o.regionW * SCALE,         rh = o.regionH * SCALE;
+            int rx = skinX + o.regionU * skinScale, ry = skinY + o.regionV * skinScale;
+            int rw = o.regionW * skinScale,         rh = o.regionH * skinScale;
             ctx.fill(rx, ry, rx + rw, ry + rh, o.color);
             if (i == sel) {
                 ctx.fill(rx,      ry,      rx+rw,   ry+1,    0xFFFFFFFF);
@@ -258,15 +269,15 @@ public class HairEditorScreen extends Screen {
                 drawOriginMarker(ctx, o, i == sel);
             }
         }
-        ctx.fill(skinX-1, skinY-1, skinX+SKIN_S+1, skinY,             0xFF888888);
-        ctx.fill(skinX-1, skinY+SKIN_S, skinX+SKIN_S+1, skinY+SKIN_S+1, 0xFF888888);
-        ctx.fill(skinX-1, skinY, skinX, skinY+SKIN_S,                  0xFF888888);
-        ctx.fill(skinX+SKIN_S, skinY, skinX+SKIN_S+1, skinY+SKIN_S,    0xFF888888);
+        ctx.fill(skinX-1, skinY-1, skinX+skinSize+1, skinY,             0xFF888888);
+        ctx.fill(skinX-1, skinY+skinSize, skinX+skinSize+1, skinY+skinSize+1, 0xFF888888);
+        ctx.fill(skinX-1, skinY, skinX, skinY+skinSize,                  0xFF888888);
+        ctx.fill(skinX+skinSize, skinY, skinX+skinSize+1, skinY+skinSize,    0xFF888888);
     }
 
     private void drawOriginMarker(DrawContext ctx, OriginEntry origin, boolean selected) {
-        int cx = skinX + origin.regionU * SCALE + SCALE / 2;
-        int cy = skinY + origin.regionV * SCALE + SCALE / 2;
+        int cx = skinX + origin.regionU * skinScale + skinScale / 2;
+        int cy = skinY + origin.regionV * skinScale + skinScale / 2;
         int color = selected ? 0xFFFFFFFF : 0xFFBBBBBB;
         ctx.fill(cx - 5, cy - 1, cx + 6, cy + 2, 0xFF000000);
         ctx.fill(cx - 1, cy - 5, cx + 2, cy + 6, 0xFF000000);
@@ -345,9 +356,15 @@ public class HairEditorScreen extends Screen {
         if (dragSliderIdx < 0) {
             syncSV(origins.get(sel));
         }
+        clampSliderScroll();
         ctx.drawTextWithShadow(textRenderer, "§6Physics & Transform:", propsX, sliderAreaTop() - 12, TEXT_WHITE);
-        int y = sliderAreaTop();
-        for (int i = 0; i < S_LABELS.length; i++) {
+        int rowsTop = sliderAreaTop();
+        int rowsBottom = sliderRowsBottom();
+        ctx.enableScissor(propsX - 2, rowsTop, propsX + PROPS_W + 6, rowsBottom);
+        int visibleRows = visibleSliderRows();
+        int end = Math.min(S_LABELS.length, sliderScrollRows + visibleRows);
+        for (int i = sliderScrollRows; i < end; i++) {
+            int y = rowsTop + (i - sliderScrollRows) * SLIDE_ROW_H;
             String val = (i == 3) ? String.valueOf((int) sv[i]) : String.format("%.3f", sv[i]);
             ctx.drawTextWithShadow(textRenderer, "§7" + S_LABELS[i] + " §f" + val, propsX, y, TEXT_WHITE);
             y += 11;
@@ -358,8 +375,9 @@ public class HairEditorScreen extends Screen {
             int kx = propsX + fw - KNOB_H / 2;
             boolean kHov = mx >= kx && mx < kx + KNOB_H && my >= y && my < y + KNOB_H;
             ctx.fill(kx, y, kx + KNOB_H, y + KNOB_H, kHov ? 0xFFFFFFFF : 0xFFCCCCCC);
-            y += KNOB_H + 2;
         }
+        ctx.disableScissor();
+        drawSliderScrollbar(ctx);
         int helpIdx = dragSliderIdx >= 0 ? dragSliderIdx : hitSlider(mx, my);
         if (helpIdx >= 0) {
             ctx.drawTextWithShadow(textRenderer, "§8" + S_HELP[helpIdx], propsX, botY - 72, TEXT_MUTED);
@@ -367,10 +385,11 @@ public class HairEditorScreen extends Screen {
     }
 
     private void drawBottomBar(DrawContext ctx) {
-        ctx.fill(0, botY, this.width, this.height, 0xFF111111);
-        ctx.fill(0, botY, this.width, botY + 1, 0xFF555555);
+        ctx.fill(0, botY, editorWidth, editorHeight, 0xFF111111);
+        ctx.fill(0, botY, editorWidth, botY + 1, 0xFF555555);
         drawPresetDropdown(ctx, (int) mouseX, (int) mouseY);
-        ctx.drawTextWithShadow(textRenderer, status, PAD + 294, botY + 10, TEXT_STATUS);
+        int statusX = Math.min(PAD + 294, Math.max(PAD, editorWidth - 180));
+        ctx.drawTextWithShadow(textRenderer, trim(status, editorWidth - statusX - PAD), statusX, botY + 10, TEXT_STATUS);
     }
 
     private void drawOriginTargetDropdown(DrawContext ctx, int mx, int my) {
@@ -427,14 +446,17 @@ public class HairEditorScreen extends Screen {
 
     @Override
     public void mouseMoved(double x, double y) {
-        this.mouseX = x;
-        this.mouseY = y;
-        super.mouseMoved(x, y);
+        double editorX = toEditorX(x);
+        double editorY = toEditorY(y);
+        this.mouseX = editorX;
+        this.mouseY = editorY;
+        super.mouseMoved(editorX, editorY);
     }
 
     @Override
     public boolean mouseClicked(Click click, boolean bl) {
-        double mx = click.x(), my = click.y();
+        Click editorClick = toEditorClick(click);
+        double mx = editorClick.x(), my = editorClick.y();
         this.mouseX = mx;
         this.mouseY = my;
 
@@ -443,10 +465,10 @@ public class HairEditorScreen extends Screen {
         }
 
         
-        if (mx >= skinX && mx < skinX + SKIN_S && my >= skinY && my < skinY + SKIN_S) {
+        if (mx >= skinX && mx < skinX + skinSize && my >= skinY && my < skinY + skinSize) {
             if (sel >= 0) {
-                dragU0 = clampSkin((int)((mx - skinX) / SCALE));
-                dragV0 = clampSkin((int)((my - skinY) / SCALE));
+                dragU0 = clampSkin((int)((mx - skinX) / skinScale));
+                dragV0 = clampSkin((int)((my - skinY) / skinScale));
                 skinDragging = true;
                 OriginEntry o = origins.get(sel);
                 if (o.anchorOnly) {
@@ -483,18 +505,19 @@ public class HairEditorScreen extends Screen {
             return true;
         }
 
-        return super.mouseClicked(click, bl);
+        return super.mouseClicked(editorClick, bl);
     }
 
     @Override
     public boolean mouseDragged(Click click, double dx, double dy) {
-        double mx = click.x(), my = click.y();
+        Click editorClick = toEditorClick(click);
+        double mx = editorClick.x(), my = editorClick.y();
         this.mouseX = mx;
         this.mouseY = my;
 
         if (skinDragging && sel >= 0) {
-            int u = clampSkin((int)((mx - skinX) / SCALE));
-            int v = clampSkin((int)((my - skinY) / SCALE));
+            int u = clampSkin((int)((mx - skinX) / skinScale));
+            int v = clampSkin((int)((my - skinY) / skinScale));
             OriginEntry o = origins.get(sel);
             if (o.anchorOnly) {
                 placeOriginMarker(o, u, v);
@@ -512,26 +535,35 @@ public class HairEditorScreen extends Screen {
             saveLiveHairThrottled(false);
             return true;
         }
-        return super.mouseDragged(click, dx, dy);
+        return super.mouseDragged(editorClick, dx / editorRenderScale, dy / editorRenderScale);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        this.mouseX = mouseX;
-        this.mouseY = mouseY;
-        if (inside((int) mouseX, (int) mouseY, listX, originListRowsTop(),
+        double editorMouseX = toEditorX(mouseX);
+        double editorMouseY = toEditorY(mouseY);
+        this.mouseX = editorMouseX;
+        this.mouseY = editorMouseY;
+        if (inside((int) editorMouseX, (int) editorMouseY, listX, originListRowsTop(),
             LIST_W, originListRowsBottom() - originListRowsTop()) && maxListScrollRows() > 0) {
             listScrollRows += verticalAmount > 0.0 ? -1 : 1;
             clampListScroll();
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+        if (inside((int) editorMouseX, (int) editorMouseY, propsX, sliderAreaTop(),
+            PROPS_W, sliderRowsBottom() - sliderAreaTop()) && maxSliderScrollRows() > 0) {
+            sliderScrollRows += verticalAmount > 0.0 ? -1 : 1;
+            clampSliderScroll();
+            return true;
+        }
+        return super.mouseScrolled(editorMouseX, editorMouseY, horizontalAmount, verticalAmount);
     }
 
     @Override
     public boolean mouseReleased(Click click) {
-        this.mouseX = click.x();
-        this.mouseY = click.y();
+        Click editorClick = toEditorClick(click);
+        this.mouseX = editorClick.x();
+        this.mouseY = editorClick.y();
         boolean changed = skinDragging || dragSliderIdx >= 0;
         if (skinDragging) {
             skinDragging = false;
@@ -548,18 +580,20 @@ public class HairEditorScreen extends Screen {
         if (changed) {
             saveLiveHair("Updated live hair.");
         }
-        return super.mouseReleased(click);
+        return super.mouseReleased(editorClick);
     }
 
     
 
     private int hitSlider(int mx, int my) {
         if (sel < 0) return -1;
-        int y = sliderAreaTop();
-        for (int i = 0; i < S_LABELS.length; i++) {
+        int rowsTop = sliderAreaTop();
+        int rowsBottom = sliderRowsBottom();
+        int end = Math.min(S_LABELS.length, sliderScrollRows + visibleSliderRows());
+        for (int i = sliderScrollRows; i < end; i++) {
+            int y = rowsTop + (i - sliderScrollRows) * SLIDE_ROW_H;
             int trackY = y + 11;
-            if (mx >= propsX && mx <= propsX + PROPS_W && my >= trackY && my < trackY + KNOB_H) return i;
-            y += SLIDE_ROW_H;
+            if (mx >= propsX && mx <= propsX + PROPS_W && my >= trackY && my < trackY + KNOB_H && my < rowsBottom) return i;
         }
         return -1;
     }
@@ -851,6 +885,41 @@ public class HairEditorScreen extends Screen {
         }
     }
 
+    private int computeSkinScale() {
+        int panelWidth = LIST_W + PROPS_W + PAD * 4;
+        int fitByWidth = Math.max(1, (editorWidth - panelWidth) / 64);
+        int fitByHeight = Math.max(1, (editorHeight - BOT_H - skinY - PAD) / 64);
+        int target = Math.max(1, Math.round(12.0f / (float) EDITOR_GUI_SCALE));
+        return Math.max(1, Math.min(target, Math.min(fitByWidth, fitByHeight)));
+    }
+
+    private void updateEditorScale() {
+        double currentScale = Math.max(1.0, MinecraftClient.getInstance().getWindow().getScaleFactor());
+        editorRenderScale = (float)(EDITOR_GUI_SCALE / currentScale);
+        editorWidth = Math.max(1, Math.round(this.width / editorRenderScale));
+        editorHeight = Math.max(1, Math.round(this.height / editorRenderScale));
+    }
+
+    private double toEditorX(double x) {
+        return x / editorRenderScale;
+    }
+
+    private double toEditorY(double y) {
+        return y / editorRenderScale;
+    }
+
+    private int toEditorX(int x) {
+        return Math.round(x / editorRenderScale);
+    }
+
+    private int toEditorY(int y) {
+        return Math.round(y / editorRenderScale);
+    }
+
+    private Click toEditorClick(Click click) {
+        return new Click(toEditorX(click.x()), toEditorY(click.y()), click.buttonInfo());
+    }
+
     private int hairListTop() {
         return listY + ROW_H * 2 + 6;
     }
@@ -899,6 +968,37 @@ public class HairEditorScreen extends Screen {
         int thumbH = Math.max(14, trackH * visibleOriginRows() / Math.max(1, origins.size()));
         int thumbY = rowsTop + (trackH - thumbH) * listScrollRows / maxScroll;
         int x = listX + LIST_W - 5;
+
+        ctx.fill(x, rowsTop, x + 4, rowsBottom, 0x80000000);
+        ctx.fill(x, thumbY, x + 4, thumbY + thumbH, 0xFF888888);
+    }
+
+    private int sliderRowsBottom() {
+        return Math.max(sliderAreaTop() + SLIDE_ROW_H, botY - 78);
+    }
+
+    private int visibleSliderRows() {
+        return Math.max(1, (sliderRowsBottom() - sliderAreaTop()) / SLIDE_ROW_H);
+    }
+
+    private int maxSliderScrollRows() {
+        return Math.max(0, S_LABELS.length - visibleSliderRows());
+    }
+
+    private void clampSliderScroll() {
+        sliderScrollRows = Math.max(0, Math.min(sliderScrollRows, maxSliderScrollRows()));
+    }
+
+    private void drawSliderScrollbar(DrawContext ctx) {
+        int maxScroll = maxSliderScrollRows();
+        if (maxScroll <= 0) return;
+
+        int rowsTop = sliderAreaTop();
+        int rowsBottom = sliderRowsBottom();
+        int trackH = Math.max(1, rowsBottom - rowsTop);
+        int thumbH = Math.max(14, trackH * visibleSliderRows() / S_LABELS.length);
+        int thumbY = rowsTop + (trackH - thumbH) * sliderScrollRows / maxScroll;
+        int x = propsX + PROPS_W + 2;
 
         ctx.fill(x, rowsTop, x + 4, rowsBottom, 0x80000000);
         ctx.fill(x, thumbY, x + 4, thumbY + thumbH, 0xFF888888);
