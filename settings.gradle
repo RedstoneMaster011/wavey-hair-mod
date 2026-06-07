@@ -58,3 +58,7 @@ stonecutter {
         }
     }
 }
+
+gradle.rootProject {
+    apply from: file('release-buckets.gradle')
+}

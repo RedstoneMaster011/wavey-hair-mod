@@ -22,10 +22,19 @@ def activeTargetName = rootProject.file('active_version.txt').exists()
 
 def target = parseTargetName(project == rootProject ? activeTargetName : project.name)
 def requestedTasks = gradle.startParameter.taskNames
+def releaseBucketTaskRequested = requestedTasks.any { taskName ->
+    taskName == 'buildReleaseBuckets'
+        || taskName == ':buildReleaseBuckets'
+        || taskName == 'cleanReleaseBuckets'
+        || taskName == ':cleanReleaseBuckets'
+        || taskName.startsWith('releaseBucket')
+        || taskName.contains(':releaseBucket')
+}
 def requestedThisProject = requestedTasks.isEmpty()
     || project == rootProject
     || project.name == activeTargetName
     || rootProject.hasProperty('configureAllTargets')
+    || releaseBucketTaskRequested
     || requestedTasks.any { taskName ->
         taskName == project.path
             || taskName.startsWith(project.path + ':')
