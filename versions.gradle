@@ -1,0 +1,111 @@
+ext.minecraftVersions = [
+    '1.20.1',
+    '1.20.2',
+    '1.20.3',
+    '1.20.4',
+    '1.20.5',
+    '1.20.6',
+    '1.21',
+    '1.21.1',
+    '1.21.2',
+    '1.21.3',
+    '1.21.4',
+    '1.21.5',
+    '1.21.6',
+    '1.21.7',
+    '1.21.8',
+    '1.21.9',
+    '1.21.10',
+    '1.21.11',
+]
+
+ext.fabricLikeLoaders = ['fabric', 'quilt'] as Set
+ext.forgeLikeLoaders = ['forge', 'neoforge'] as Set
+
+ext.yarnMappingsByMc = [
+    '1.20.1': '1.20.1+build.10',
+    '1.20.2': '1.20.2+build.4',
+    '1.20.3': '1.20.3+build.1',
+    '1.20.4': '1.20.4+build.3',
+    '1.20.5': '1.20.5+build.1',
+    '1.20.6': '1.20.6+build.3',
+    '1.21': '1.21+build.9',
+    '1.21.1': '1.21.1+build.3',
+    '1.21.2': '1.21.2+build.1',
+    '1.21.3': '1.21.3+build.2',
+    '1.21.4': '1.21.4+build.8',
+    '1.21.5': '1.21.5+build.1',
+    '1.21.6': '1.21.6+build.1',
+    '1.21.7': '1.21.7+build.8',
+    '1.21.8': '1.21.8+build.1',
+    '1.21.9': '1.21.9+build.1',
+    '1.21.10': '1.21.10+build.3',
+    '1.21.11': '1.21.11+build.6',
+]
+
+ext.fabricApiByMc = [
+    '1.20.1': '0.92.9+1.20.1',
+    '1.20.2': '0.91.6+1.20.2',
+    '1.20.3': '0.91.1+1.20.3',
+    '1.20.4': '0.97.3+1.20.4',
+    '1.20.5': '0.97.8+1.20.5',
+    '1.20.6': '0.100.8+1.20.6',
+    '1.21': '0.102.0+1.21',
+    '1.21.1': '0.116.12+1.21.1',
+    '1.21.2': '0.106.1+1.21.2',
+    '1.21.3': '0.114.1+1.21.3',
+    '1.21.4': '0.119.4+1.21.4',
+    '1.21.5': '0.128.2+1.21.5',
+    '1.21.6': '0.128.2+1.21.6',
+    '1.21.7': '0.129.0+1.21.7',
+    '1.21.8': '0.136.1+1.21.8',
+    '1.21.9': '0.134.1+1.21.9',
+    '1.21.10': '0.138.4+1.21.10',
+    '1.21.11': '0.141.4+1.21.11',
+]
+
+ext.forgeByMc = [
+    '1.20.1': '1.20.1-47.4.20',
+    '1.20.2': '1.20.2-48.0.0',
+    '1.20.4': '1.20.4-49.2.7',
+]
+
+ext.neoforgeByMc = [
+    '1.20.5': [artifact: 'net.neoforged:neoforge', version: '20.5.21-beta'],
+    '1.20.6': [artifact: 'net.neoforged:neoforge', version: '20.6.139'],
+    '1.21': [artifact: 'net.neoforged:neoforge', version: '21.0.167'],
+    '1.21.1': [artifact: 'net.neoforged:neoforge', version: '21.1.233'],
+    '1.21.2': [artifact: 'net.neoforged:neoforge', version: '21.2.1-beta'],
+    '1.21.3': [artifact: 'net.neoforged:neoforge', version: '21.3.96'],
+    '1.21.4': [artifact: 'net.neoforged:neoforge', version: '21.4.157'],
+    '1.21.5': [artifact: 'net.neoforged:neoforge', version: '21.5.97'],
+    '1.21.6': [artifact: 'net.neoforged:neoforge', version: '21.6.20-beta'],
+    '1.21.7': [artifact: 'net.neoforged:neoforge', version: '21.7.25-beta'],
+    '1.21.8': [artifact: 'net.neoforged:neoforge', version: '21.8.53'],
+    '1.21.9': [artifact: 'net.neoforged:neoforge', version: '21.9.16-beta'],
+    '1.21.10': [artifact: 'net.neoforged:neoforge', version: '21.10.64'],
+    '1.21.11': [artifact: 'net.neoforged:neoforge', version: '21.11.42'],
+]
+
+ext.releaseBuckets = [
+    [id: 'fabric-quilt-1.20.1', source: '1.20.1-fabric', loaders: ['fabric', 'quilt'], mcVersions: ['1.20.1'], fabricRange: '1.20.1'],
+    [id: 'fabric-quilt-1.20.2-1.20.6', source: '1.20.2-fabric', loaders: ['fabric', 'quilt'], mcVersions: ['1.20.2', '1.20.3', '1.20.4', '1.20.5', '1.20.6'], fabricRange: '>=1.20.2 <1.21'],
+    [id: 'fabric-quilt-1.21-1.21.1', source: '1.21-fabric', loaders: ['fabric', 'quilt'], mcVersions: ['1.21', '1.21.1'], fabricRange: '>=1.21 <1.21.2'],
+    [id: 'fabric-quilt-1.21.2-1.21.4', source: '1.21.2-fabric', loaders: ['fabric', 'quilt'], mcVersions: ['1.21.2', '1.21.3', '1.21.4'], fabricRange: '>=1.21.2 <1.21.5'],
+    [id: 'fabric-quilt-1.21.5', source: '1.21.5-fabric', loaders: ['fabric', 'quilt'], mcVersions: ['1.21.5'], fabricRange: '1.21.5'],
+    [id: 'fabric-quilt-1.21.6-1.21.8', source: '1.21.6-fabric', loaders: ['fabric', 'quilt'], mcVersions: ['1.21.6', '1.21.7', '1.21.8'], fabricRange: '>=1.21.6 <1.21.9'],
+    [id: 'fabric-quilt-1.21.9-1.21.10', source: '1.21.9-fabric', loaders: ['fabric', 'quilt'], mcVersions: ['1.21.9', '1.21.10'], fabricRange: '>=1.21.9 <1.21.11'],
+    [id: 'fabric-quilt-1.21.11', source: '1.21.11-fabric', loaders: ['fabric', 'quilt'], mcVersions: ['1.21.11'], fabricRange: '1.21.11'],
+
+    [id: 'forge-1.20.1', source: '1.20.1-forge', loaders: ['forge'], mcVersions: ['1.20.1'], forgeRange: '[1.20.1]'],
+    [id: 'forge-1.20.2-1.20.4', source: '1.20.2-forge', loaders: ['forge'], mcVersions: ['1.20.2', '1.20.4'], forgeRange: '[1.20.2,1.20.5)'],
+
+    [id: 'neoforge-1.20.5-1.20.6', source: '1.20.5-neoforge', loaders: ['neoforge'], mcVersions: ['1.20.5', '1.20.6'], forgeRange: '[1.20.5,1.21)'],
+    [id: 'neoforge-1.21-1.21.1', source: '1.21-neoforge', loaders: ['neoforge'], mcVersions: ['1.21', '1.21.1'], forgeRange: '[1.21,1.21.2)'],
+    [id: 'neoforge-1.21.2-1.21.3', source: '1.21.2-neoforge', loaders: ['neoforge'], mcVersions: ['1.21.2', '1.21.3'], forgeRange: '[1.21.2,1.21.4)'],
+    [id: 'neoforge-1.21.4', source: '1.21.4-neoforge', loaders: ['neoforge'], mcVersions: ['1.21.4'], forgeRange: '[1.21.4]'],
+    [id: 'neoforge-1.21.5', source: '1.21.5-neoforge', loaders: ['neoforge'], mcVersions: ['1.21.5'], forgeRange: '[1.21.5]'],
+    [id: 'neoforge-1.21.6-1.21.8', source: '1.21.6-neoforge', loaders: ['neoforge'], mcVersions: ['1.21.6', '1.21.7', '1.21.8'], forgeRange: '[1.21.6,1.21.9)'],
+    [id: 'neoforge-1.21.9-1.21.10', source: '1.21.9-neoforge', loaders: ['neoforge'], mcVersions: ['1.21.9', '1.21.10'], forgeRange: '[1.21.9,1.21.11)'],
+    [id: 'neoforge-1.21.11', source: '1.21.11-neoforge', loaders: ['neoforge'], mcVersions: ['1.21.11'], forgeRange: '[1.21.11]'],
+]
