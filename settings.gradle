@@ -11,6 +11,7 @@ pluginManagement {
 
 plugins {
     id 'dev.kikugie.stonecutter' version '0.9.5'
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
 rootProject.name = 'Hair-Physics'
@@ -36,7 +37,10 @@ def minecraftVersions = [
     '1.21.11',
 ]
 
-def forgeVersions = ['1.20.1', '1.20.2', '1.20.3', '1.20.4'] as Set
+def forgeVersions = ['1.20.1', '1.20.2', '1.20.4'] as Set
+def neoforgeVersions = minecraftVersions.findAll { mc ->
+    !(mc in ['1.20.1', '1.20.2', '1.20.3', '1.20.4'])
+} as Set
 
 stonecutter {
     kotlinController = false
@@ -48,7 +52,9 @@ stonecutter {
             if (forgeVersions.contains(mc)) {
                 version "${mc}-forge", mc
             }
-            version "${mc}-neoforge", mc
+            if (neoforgeVersions.contains(mc)) {
+                version "${mc}-neoforge", mc
+            }
         }
     }
 }
