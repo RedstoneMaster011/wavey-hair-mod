@@ -1,105 +1,367 @@
 plugins {
-    id 'fabric-loom' version '1.16-SNAPSHOT'
+    id 'base'
+    id 'dev.architectury.loom' version '1.13-SNAPSHOT' apply false
     id 'maven-publish'
 }
+
+apply from: rootProject.file('versions.gradle')
+
+def parseTargetName = { String name ->
+    for (String loader : ['neoforge', 'fabric', 'quilt', 'forge']) {
+        String suffix = "-${loader}"
+        if (name.endsWith(suffix)) {
+            return [name: name, mc: name.substring(0, name.length() - suffix.length()), loader: loader, enabled: true]
+        }
+    }
+    return [name: '1.21.11-fabric', mc: '1.21.11', loader: 'fabric', enabled: true]
+}
+
+def activeTargetName = rootProject.file('active_version.txt').exists()
+    ? rootProject.file('active_version.txt').text.trim()
+    : '1.21.11-fabric'
+
+def target = parseTargetName(project == rootProject ? activeTargetName : project.name)
+def requestedTasks = gradle.startParameter.taskNames
+def requestedThisProject = requestedTasks.isEmpty()
+    || project == rootProject
+    || project.name == activeTargetName
+    || rootProject.hasProperty('configureAllTargets')
+    || requestedTasks.any { taskName ->
+        taskName == project.path
+            || taskName.startsWith(project.path + ':')
+            || taskName == project.name
+            || taskName.startsWith(project.name + ':')
+    }
+
+ext.targetMinecraftVersion = target.mc
+ext.targetLoader = target.loader
+ext.targetName = target.name
 
 version = project.mod_version
 group = project.maven_group
 
 base {
-    archivesName = project.archives_base_name
+    archivesName = project == rootProject
+        ? project.archives_base_name
+        : "${project.archives_base_name}-${target.mc}-${target.loader}"
 }
 
-loom {
-    splitEnvironmentSourceSets()
-
-    mods {
-        "hair-physics" {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.client
+if (!target.enabled || !requestedThisProject) {
+    tasks.configureEach { task ->
+        if (task.name in [
+            'compileJava',
+            'compileTestJava',
+            'processResources',
+            'processTestResources',
+            'classes',
+            'testClasses',
+            'jar',
+            'sourcesJar',
+            'remapJar',
+            'build',
+            'assemble',
+            'check',
+            'test',
+        ]) {
+            task.enabled = false
         }
     }
+    tasks.register('targetInfo') {
+        doLast {
+            println "${project.path} is registered as ${target.name}."
+        }
+    }
+    return
 }
 
-fabricApi {
-    configureDataGeneration {
-        client = true
+def loomPlatform = target.loader == 'neoforge' && target.mc == '1.20.1' ? 'forge' : target.loader
+project.ext.set('loom.platform', loomPlatform)
+
+apply plugin: 'dev.architectury.loom'
+
+stonecutter {
+    constants {
+        def legacyNeoForgeApi = target.loader == 'neoforge' && target.mc == '1.20.1'
+        put('fabric', target.loader == 'fabric')
+        put('quilt', target.loader == 'quilt')
+        put('forge', target.loader == 'forge' || legacyNeoForgeApi)
+        put('neoforge', target.loader == 'neoforge' && !legacyNeoForgeApi)
+        put('fabric_like', target.loader in ['fabric', 'quilt'])
+        put('forge_like', target.loader in ['forge', 'neoforge'])
     }
 }
 
 repositories {
-    
-    
-    
-    
-    
+    mavenCentral()
+    maven { url 'https://maven.fabricmc.net/' }
+    maven { url 'https://maven.architectury.dev/' }
+    maven { url 'https://maven.minecraftforge.net/' }
+    maven { url 'https://maven.neoforged.net/releases/' }
+    maven { url 'https://maven.quiltmc.org/repository/release/' }
+}
+
+def fabricApiVersion = fabricApiByMc[target.mc]
+def fabricLoaderVersion = project.fabric_loader_version
+def quiltLoaderVersion = project.quilt_loader_version
+def forgeVersionForLaunch = target.loader == 'forge' ? forgeByMc[target.mc] : null
+def javaVersionNumber = target.mc in ['1.20.1', '1.20.2', '1.20.3', '1.20.4'] ? 17 : 21
+def assetIndexId = target.mc
+def minecraftInfoFile = new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${target.mc}/mojang_minecraft_info.json")
+if (minecraftInfoFile.exists()) {
+    def minecraftInfo = new groovy.json.JsonSlurper().parse(minecraftInfoFile)
+    assetIndexId = minecraftInfo.assetIndex?.id ?: minecraftInfo.assets ?: target.mc
+}
+def loomAssetsRoot = new File(gradle.gradleUserHomeDir, 'caches/fabric-loom/assets').absolutePath
+def runtimeMappingsFile = null
+def loomMcCache = new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${target.mc}")
+if (loomMcCache.exists()) {
+    runtimeMappingsFile = loomMcCache.listFiles()?.find { file ->
+        file.directory && file.name.startsWith('loom.mappings') && file.name.contains("-${target.loader}-") && new File(file, 'mappings.tiny').exists()
+    }?.with { new File(it, 'mappings.tiny') }
 }
 
 dependencies {
-    
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    minecraft "com.mojang:minecraft:${target.mc}"
+    mappings loom.officialMojangMappings()
 
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-}
-
-processResources {
-    inputs.property "version", project.version
-    inputs.property "minecraft_version", project.minecraft_version
-    inputs.property "loader_version", project.loader_version
-    filteringCharset "UTF-8"
-
-    filesMatching("fabric.mod.json") {
-        expand "version": project.version,
-                "minecraft_version": project.minecraft_version,
-                "loader_version": project.loader_version
+    if (target.loader == 'fabric') {
+        modImplementation "net.fabricmc:fabric-loader:${fabricLoaderVersion}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
+    } else if (target.loader == 'quilt') {
+        modImplementation "org.quiltmc:quilt-loader:${quiltLoaderVersion}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
+    } else if (target.loader == 'forge') {
+        def forgeVersion = forgeByMc[target.mc]
+        if (forgeVersion == null || forgeVersion.isBlank()) {
+            throw new GradleException("Forge does not publish an artifact for Minecraft ${target.mc}.")
+        }
+        forge "net.minecraftforge:forge:${forgeVersion}"
+    } else if (target.loader == 'neoforge') {
+        def neo = neoforgeByMc[target.mc]
+        if (neo == null || neo.version == null || neo.version.isBlank()) {
+            throw new GradleException("NeoForge does not publish an artifact for Minecraft ${target.mc}.")
+        }
+        if (configurations.findByName('neoForge') != null) {
+            neoForge "${neo.artifact}:${neo.version}"
+        } else {
+            forge "${neo.artifact}:${neo.version}"
+        }
     }
 }
 
-def targetJavaVersion = 21
+loom {
+    runs {
+        client {
+            client()
+            runDir 'run'
+            if (target.loader == 'forge') {
+                programArgs '--gameDir', '.',
+                    '--launchTarget', 'forge_userdev_client',
+                    '--version', 'MOD_DEV',
+                    '--assetIndex', assetIndexId,
+                    '--assetsDir', loomAssetsRoot
+                vmArg '-Djava.net.preferIPv6Addresses=system'
+                if (runtimeMappingsFile != null) {
+                    vmArg "-Darchitectury.naming.sourceNamespace=official"
+                    vmArg "-Darchitectury.naming.mappingsPath=${runtimeMappingsFile.absolutePath}"
+                    vmArg "-Darchitectury.mixinRemapper.sourceNamespace=official"
+                    vmArg "-Darchitectury.mixinRemapper.mappingsPath=${runtimeMappingsFile.absolutePath}"
+                }
+                property 'fml.earlyWindowControl', 'false'
+                property 'fml.earlyWindowProvider', 'none'
+                property 'forge.enableGameTest', 'true'
+            }
+        }
+        server {
+            server()
+            runDir 'run'
+        }
+    }
+    mods {
+        "hair-physics" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+sourceSets {
+    main {
+        def generatedMain = project.layout.buildDirectory.dir('generated/stonecutter/main').get().asFile
+        def mainRoot = project == rootProject ? rootProject.file('src/main') : generatedMain
+        java.srcDirs = [
+            new File(mainRoot, 'java'),
+        ]
+        if (target.loader in ['forge', 'neoforge']) {
+            java.exclude 'dev/redstone/hairphysics/client/HairphysicsDataGenerator.java'
+        }
+        resources.srcDirs = [
+            new File(mainRoot, 'resources'),
+        ]
+    }
+}
+
+tasks.named('processResources') {
+    if (project != rootProject) {
+        dependsOn 'stonecutterGenerate'
+    }
+    inputs.property 'version', project.version
+    inputs.property 'minecraft_version', target.mc
+    inputs.property 'loader_version', fabricLoaderVersion
+    filteringCharset 'UTF-8'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    if (target.loader == 'fabric') {
+        exclude 'quilt.mod.json'
+        exclude 'META-INF/mods.toml'
+        exclude 'META-INF/neoforge.mods.toml'
+    } else if (target.loader == 'quilt') {
+        exclude 'fabric.mod.json'
+        exclude 'META-INF/mods.toml'
+        exclude 'META-INF/neoforge.mods.toml'
+    } else if (target.loader == 'forge') {
+        exclude 'fabric.mod.json'
+        exclude 'quilt.mod.json'
+        exclude 'META-INF/neoforge.mods.toml'
+    } else if (target.loader == 'neoforge') {
+        exclude 'fabric.mod.json'
+        exclude 'quilt.mod.json'
+        if (target.mc == '1.20.1') {
+            exclude 'META-INF/neoforge.mods.toml'
+        } else {
+            exclude 'META-INF/mods.toml'
+        }
+    }
+
+    filesMatching(['fabric.mod.json', 'quilt.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+        expand 'version': project.version,
+            'minecraft_version': target.mc,
+            'loader_version': fabricLoaderVersion
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
-    
-    
-    
-    
-    it.options.encoding = "UTF-8"
-    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
-        it.options.release.set(targetJavaVersion)
+    if (project != rootProject) {
+        dependsOn 'stonecutterGenerate'
+    }
+    options.encoding = 'UTF-8'
+    options.release.set(javaVersionNumber)
+}
+
+tasks.withType(JavaExec).configureEach {
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(javaVersionNumber)
+    })
+}
+
+if (target.loader == 'forge') {
+    configurations.configureEach {
+        exclude group: 'net.fabricmc', module: 'fabric-log4j-util'
+    }
+
+    def makeForgeLaunchMinecraftJar = { List<String> paths ->
+        def source = paths.find { path ->
+            def name = new File(path).name
+            name.startsWith("forge-${forgeVersionForLaunch}-minecraft-merged") && name.endsWith('.jar')
+        }
+        if (source == null) {
+            return null
+        }
+        def out = layout.buildDirectory.file("loom-cache/forgeLaunch/forge-${forgeVersionForLaunch}-launch.jar").get().asFile
+        def sourceFile = new File(source)
+        if (!out.exists() || out.lastModified() < sourceFile.lastModified()) {
+            out.parentFile.mkdirs()
+            def manifest = new java.util.jar.Manifest()
+            manifest.mainAttributes.putValue('Manifest-Version', '1.0')
+            manifest.mainAttributes.putValue('Automatic-Module-Name', 'minecraft')
+            new java.util.jar.JarOutputStream(new FileOutputStream(out), manifest).withCloseable { output ->
+                new java.util.jar.JarFile(sourceFile).withCloseable { input ->
+                    input.entries().each { entry ->
+                        if (entry.name != 'META-INF/MANIFEST.MF') {
+                            def copy = new java.util.jar.JarEntry(entry.name)
+                            copy.time = entry.time
+                            output.putNextEntry(copy)
+                            if (!entry.directory) {
+                                input.getInputStream(entry).withCloseable { stream ->
+                                    stream.transferTo(output)
+                                }
+                            }
+                            output.closeEntry()
+                        }
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    def filterForgeRunArgFile = {
+        def argFile = layout.buildDirectory.file('loom-cache/argFiles/runClient').get().asFile
+        if (argFile.exists()) {
+            def lines = argFile.readLines()
+            if (lines.size() >= 2 && lines[0] == '-classpath') {
+                def paths = lines[1]
+                    .split(File.pathSeparator)
+                    .findAll { !it.contains('fabric-log4j-util') }
+                    .findAll { !new File(it).name.startsWith("forge-${forgeVersionForLaunch}-minecraft-merged") }
+                def launchMinecraft = makeForgeLaunchMinecraftJar(paths + lines[1].split(File.pathSeparator).toList())
+                def forgeUniversal = new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${target.mc}/forge/${forgeVersionForLaunch}/forge-universal.jar")
+                if (launchMinecraft != null) {
+                    paths.add(0, launchMinecraft.absolutePath)
+                }
+                if (forgeUniversal.exists() && !paths.contains(forgeUniversal.absolutePath)) {
+                    paths.add(1, forgeUniversal.absolutePath)
+                }
+                def filtered = paths.join(File.pathSeparator)
+                if (filtered != lines[1]) {
+                    lines[1] = filtered
+                    argFile.text = lines.join(System.lineSeparator()) + System.lineSeparator()
+                }
+            }
+        }
+    }
+    tasks.matching { it.name == 'configureClientLaunch' }.configureEach {
+        doLast {
+            filterForgeRunArgFile()
+        }
+    }
+    tasks.matching { it.name == 'runClient' }.configureEach {
+        doFirst {
+            filterForgeRunArgFile()
+        }
     }
 }
 
 java {
-    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
-    if (JavaVersion.current() < javaVersion) {
-        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    def targetJava = JavaVersion.toVersion(javaVersionNumber)
+    if (JavaVersion.current() < targetJava) {
+        toolchain.languageVersion = JavaLanguageVersion.of(javaVersionNumber)
     }
-    
-    
-    
     withSourcesJar()
 }
 
+tasks.named('sourcesJar') {
+    if (project != rootProject) {
+        dependsOn 'stonecutterGenerate'
+    }
+}
+
 jar {
-    from("LICENSE") {
+    from(rootProject.file('LICENSE')) {
         rename { "${it}_${project.archives_base_name}" }
     }
 }
 
-
 publishing {
     publications {
-        create("mavenJava", MavenPublication) {
-            artifactId = project.archives_base_name
+        create('mavenJava', MavenPublication) {
+            artifactId = base.archivesName.get()
             from components.java
         }
     }
+}
 
-    
-    repositories {
-        
-        
-        
-        
+tasks.register('printTarget') {
+    doLast {
+        println "${target.name}: Minecraft ${target.mc}, loader ${target.loader}, Java ${javaVersionNumber}"
     }
 }
