@@ -1,0 +1,18 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All-Rights-Reserved"
+
+[[mods]]
+modId="hair_physics"
+version="${version}"
+displayName="Hair-Physics"
+logoFile="assets/hair-physics/icon.png"
+authors="redstone"
+description="Hair physics for player skins."
+
+[[dependencies.hair_physics]]
+modId="minecraft"
+${dependency_required_field}
+versionRange="[${minecraft_version}]"
+ordering="NONE"
+side="CLIENT"
